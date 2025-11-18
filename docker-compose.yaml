@@ -1,0 +1,26 @@
+services:
+  llama-rocm:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    # image: llama-rocm-gfx1151:b1111
+    container_name: lemonade-swap
+
+    environment:
+      - MODEL=/models/gpt-oss-120b-F16.gguf
+      # - LLAMA_ARG_HOST=0.0.0.0
+      # - LLAMA_ARG_PORT=8000
+      # Path **inside** the container:
+      # MODEL: /models/your-model.gguf
+    user: "0:0"
+    volumes:
+      # Point this at your GGUF model on the host
+      - /usr/local/share/huggingface/hub/:/models
+    # Map llama-server's default port 
+    ports:
+      - "8000:8000"
+    # You’ll also need to pass your GPU devices, e.g.:
+    devices:
+      - /dev/dri:/dev/dri
+      - /dev/kfd:/dev/kfd
+    restart: unless-stopped
