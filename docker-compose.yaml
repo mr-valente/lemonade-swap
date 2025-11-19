@@ -3,19 +3,25 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: lemonade-llama:latest
-    container_name: lemonade-swap
+      args:
+        - LLAMA_SWAP_VERSION=173
+        - LLAMACPP_RELEASE=b1111
+        - LLAMACPP_GFX=gfx1151
+    # image: lemonade-swap:latest
+    container_name: lemonade-swap 
 
     environment:
-      - MODEL=/models/gpt-oss-120b-F16.gguf
+      # - MODEL=/models/gpt-oss-120b-F16.gguf
+      - HF_HOME=/huggingface
+      - HF_HUB_CACHE=/huggingface/hub
       # - LLAMA_ARG_HOST=0.0.0.0
       # - LLAMA_ARG_PORT=8000
       # Path **inside** the container:
       # MODEL: /models/your-model.gguf
-    user: "0:0"
+    # user: "0:0"
     volumes:
       # Point this at your GGUF model on the host
-      - /usr/local/share/huggingface/hub/:/models
+      - /usr/local/share/huggingface/hub/:/huggingface/hub
       - ./tmp/config.yaml:/config/config.yaml
     # Map llama-server's default port 
     ports:

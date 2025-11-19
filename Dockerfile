@@ -13,49 +13,36 @@ RUN apt-get update && \
         # For huggingface-hub
         python3 \
         python3-pip \
-        # For Homebrew and llama-swap
-        build-essential \
-        procps \
-        file \
-        git \
+        # For llama-swap
+        tar \
     && rm -rf /var/lib/apt/lists/*
 
 # Install huggingface-hub for model downloads
 RUN pip3 install --no-cache-dir huggingface-hub[cli] --break-system-packages
 
-# Create a non-root user for Homebrew installation
-RUN useradd -m -s /bin/bash linuxbrew && \
-    echo 'linuxbrew ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
-
-# Install Homebrew as linuxbrew user (non-interactive)
-USER linuxbrew
-RUN /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" </dev/null
-
-# Install llama-swap
-RUN /home/linuxbrew/.linuxbrew/bin/brew tap mostlygeek/llama-swap && \
-    /home/linuxbrew/.linuxbrew/bin/brew install llama-swap
-
-# Switch back to root for the rest of the build
-USER root
-
-# Add Homebrew to PATH
-ENV PATH="/home/linuxbrew/.linuxbrew/bin:${PATH}"
-
-# Where we'll put the llama.cpp ROCm binaries
+# Where we'll put the llama.cpp ROCm binaries and llama-swap
 WORKDIR /opt/llama
+
+# Install llama-swap binary from GitHub releases
+ARG LLAMA_SWAP_VERSION
+RUN curl -L "https://github.com/mostlygeek/llama-swap/releases/download/v${LLAMA_SWAP_VERSION}/llama-swap_${LLAMA_SWAP_VERSION}_linux_amd64.tar.gz" -o /tmp/llama-swap.tar.gz && \
+    tar -xzf /tmp/llama-swap.tar.gz -C /opt/llama && \
+    rm /tmp/llama-swap.tar.gz && \
+    chmod +x /opt/llama/llama-swap
 
 # Download and extract the gfx1151 Ubuntu ROCm build
 # (b1111 release, ROCm 7 built-in; no extra ROCm install needed) 
-ARG LLAMA_ZIP_URL="https://github.com/lemonade-sdk/llamacpp-rocm/releases/download/b1111/llama-b1111-ubuntu-rocm-gfx1151-x64.zip"
+ARG LLAMACPP_RELEASE
+ARG LLAMACPP_GFX
 
 RUN set -eux; \
-    curl -L "$LLAMA_ZIP_URL" -o /tmp/llama.zip; \
+    curl -L "https://github.com/lemonade-sdk/llamacpp-rocm/releases/download/${LLAMACPP_RELEASE}/llama-${LLAMACPP_RELEASE}-ubuntu-rocm-${LLAMACPP_GFX}-x64.zip" -o /tmp/llama.zip; \
     unzip /tmp/llama.zip; \
     rm /tmp/llama.zip; \
     # Move contents up if they were extracted into a subdirectory
-    if [ -d llama-b1111-ubuntu-rocm-gfx1151-x64 ]; then \
-        mv llama-b1111-ubuntu-rocm-gfx1151-x64/* . && \
-        rmdir llama-b1111-ubuntu-rocm-gfx1151-x64; \
+    if [ -d llama-${LLAMACPP_RELEASE}-ubuntu-rocm-${LLAMACPP_GFX}-x64 ]; then \
+        mv llama-${LLAMACPP_RELEASE}-ubuntu-rocm-${LLAMACPP_GFX}-x64/* . && \
+        rmdir llama-${LLAMACPP_RELEASE}-ubuntu-rocm-${LLAMACPP_GFX}-x64; \
     fi; \
     chmod +x llama-server
 
@@ -63,29 +50,24 @@ RUN set -eux; \
 ENV PATH="/opt/llama:${PATH}"
 
 # Configure llama-server defaults
-ENV LLAMA_ARG_HOST=0.0.0.0
-ENV LLAMA_ARG_PORT=8000
+# ENV LLAMA_ARG_HOST=0.0.0.0
+# ENV LLAMA_ARG_PORT=8000
 
 # Configure Hugging Face Hub
 # HF_HOME sets the base directory for all HF data (token, cache, models)
 # HF_HUB_CACHE sets where models are downloaded
-ENV HF_HOME=/huggingface
-ENV HF_HUB_CACHE=/huggingface/hub
+# ENV HF_HOME=/huggingface
+# ENV HF_HUB_CACHE=/huggingface/hub
 
 # Default llama-swap config location (can be overridden)
-ENV LLAMA_SWAP_CONFIG=/config/config.yaml
-ENV LLAMA_SWAP_LISTEN=0.0.0.0:8080
-
-# Simple entrypoint: require MODEL env var and run the quick smoketest command
-# from the README:
-#   llama-server -m YOUR_GGUF_MODEL_PATH -ngl 99 
-COPY entrypoint.sh /entrypoint.sh
-
-RUN chmod +x /entrypoint.sh
+# ENV LLAMA_SWAP_CONFIG=/config/config.yaml
+# ENV LLAMA_SWAP_LISTEN=0.0.0.0:8080
 
 # llama-swap listens on port 8080 by default
-EXPOSE 8080
+# EXPOSE 8080
 
-ENTRYPOINT ["/entrypoint.sh"]
+WORKDIR /
+
+CMD ["llama-swap", "--config", "/config/config.yaml", "--listen", "0.0.0.0:8080"]
 
 
